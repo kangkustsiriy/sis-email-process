@@ -47,6 +47,7 @@ def process_subtasks(subtasks, jira_server, headers, user_name):
     granted_roles = []
     pending_roles = []
     denied_roles = []
+    existing_roles = []
     user_name_regex = re.escape(user_name)
 
     for subtask in subtasks:
@@ -77,17 +78,18 @@ def process_subtasks(subtasks, jira_server, headers, user_name):
                 denied_roles.append(subtask_summary)
             elif any(keyword in comment for keyword in ["duplicate", "already"] for comment in comments_text):
                 # print("redundant request")
-                pass
+                existing_roles.append(subtask_summary)
             else:
                 # print("granted")
                 granted_roles.append(subtask_summary)
             print("pending", pending_roles)
             print("granted", granted_roles)
             print("denied", denied_roles)
+            print("existing", existing_roles)
         else:
             print(f"Failed to fetch subtask {subtask['key']}. Status Code: {subtask_response.status_code}")
 
-    return granted_roles, pending_roles, denied_roles
+    return granted_roles, pending_roles, denied_roles, existing_roles
 
 def search_incident_csv(csv_path, last_name, first_name):
     """Search for the incident number in the CSV file based on the user's name."""
@@ -118,7 +120,7 @@ You now have been granted access to UC Berkeley’s Student Information Systems.
 
 An employee event or change in job duties will trigger a review and potential loss of some or all currently assigned roles/access. In order to regain access to roles or access thereafter, you will need to complete a new Access Request form.
 
-{granted_section}{pending_section}{denied_section}
+{granted_section}{pending_section}{denied_section}{existing_section}
 
 Please select SIS Campus Solutions or paste the following URL into your address bar:
 https://bcsint.is.berkeley.edu
@@ -144,7 +146,7 @@ Hello,
 
 Your SIS account has been updated; added to your existing roles are the requested role(s) below:
 
-{granted_section}{pending_section}{denied_section}
+{granted_section}{pending_section}{denied_section}{existing_section}
 
 An employee event or change in job duties will trigger a review and potential loss of some or all currently assigned roles/access. In order to regain access to roles or access thereafter, you will need to complete a new Access Request form.
 
@@ -157,7 +159,7 @@ In the event of any login issues:
 • Logging directly into Campus Solutions now requires the use of a Virtual Private Network (VPN). Please see the following pages for more information: 
 - https://security.berkeley.edu/services/bsecure/bsecure-remote-access-vpn
 - https://calnetweb.berkeley.edu/calnet-technologists/duo-mfa-service-non-web-integrations
-a
+
 Note:
 If you have difficulty accessing SIS or have questions about your access, do not reply to this email as it is not monitored. Please reply to the ServiceNow ticket being created for this request.
 
@@ -218,18 +220,20 @@ def generate_template(ticket_id, output_folder):
         return
 
     # Process subtasks
-    granted_roles, pending_roles, denied_roles = process_subtasks(data['fields']['subtasks'], jira_server, headers, user_name)
+    granted_roles, pending_roles, denied_roles, existing_roles = process_subtasks(data['fields']['subtasks'], jira_server, headers, user_name)
 
     # Construct sections only if there are roles
     granted_section = f"\n        You have been granted the following roles:\n        • " + "\n        • ".join(granted_roles) + "\n" if granted_roles else ""
     pending_section = f"\n        We are waiting for approval for:\n        • " + "\n        • ".join(pending_roles) + "\n" if pending_roles else ""
     denied_section = f"\n        The following roles were denied:\n        • " + "\n        • ".join(denied_roles) + "\n" if denied_roles else ""
+    existing_section = f"\n        You already have the following roles:\n        • " + "\n        • ".join(existing_roles) + "\n" if existing_roles else ""
 
     # Fill in the template
     email_message = template.format(
         granted_section=granted_section,
         pending_section=pending_section,
-        denied_section=denied_section
+        denied_section=denied_section,
+        existing_section=existing_section
     )
 
     # Save the email message
